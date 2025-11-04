@@ -1,10 +1,10 @@
-# Retail Sales Analysis SQL Project
+# Zomato Data Analysis SQL Project
 
 ## Project Overview
 
-**Project Title**: Retail-Sales-Analysis-SQL-Project--P1  
-**Level**: Beginner  
-**Database**: `Project`
+**Project Title**: Zomato-Data-Analysis-SQL-Project--P2  
+**Level**: Intermediate  
+**Database**: `Zomato_Pro`
 
 This project is designed to demonstrate SQL skills and techniques typically used by data analysts to explore, clean, and analyze retail sales data. The project involves setting up a retail sales database, performing exploratory data analysis (EDA), and answering specific business questions through SQL queries. This project is ideal for those who are starting their journey in data analysis and want to build a solid foundation in SQL.
 
@@ -19,96 +19,230 @@ This project is designed to demonstrate SQL skills and techniques typically used
 
 ### 1. Database Setup
 
-- **Database Creation**: The project starts by creating a database named `Project`.
-- **Table Creation**: A table named `retail_sales` is created to store the sales data. The table structure includes columns for transaction ID, sale date, sale time, customer ID, gender, age, product category, quantity sold, price per unit, cost of goods sold (COGS), and total sale amount.
+- **Database Creation**: The project starts by creating a database named `Zomato_Pro`.
+- **Tables Creation**:
+- 1) A table named `customers` is created to store the customers data. The table structure includes columns for customer_id, customer_name, reg_date.
+- 2) A table named `restaurants` is created to store the restaurants data. The table structure includes columns for restaurant_id, restaurant_name, city, opening_hours.
+- 3) A table named `orders` is created to store the orders data. The table structure includes columns for order_id, customer_id, restaurant_id, order_item, order_date,           order_time, order_status, total_amount.
+- 4) A table named `rider` is created to store the rider data. The table structure includes columns for rider_id, rider_name, sign_up.
+- 5) A table named `deliveries` is created to store the deliveries data. The table structure includes columns for delivery_id, order_id, delivery_status, delivery_time,          rider_id.
 
 ```sql
-CREATE DATABASE Project;
+CREATE DATABASE Zomato_Pro;
 
-CREATE TABLE retail_sales
+CREATE TABLE customers
 (
-    transactions_id INT PRIMARY KEY,
-    sale_date DATE,	
-    sale_time TIME,
-    customer_id INT,	
-    gender VARCHAR(15),
-    age INT,
-    category VARCHAR(15),
-    quantiy INT,
-    price_per_unit INT,	
-    cogs FLOAT,
-    total_sale FLOAT
+    customer_id INT PRIMARY KEY,	
+    customer_name VARCHAR(25),
+    reg_date DATE
+);
+
+CREATE TABLE restaurants
+(
+    restaurant_id INT PRIMARY KEY,	
+    restaurant_name VARCHAR(55),
+    city VARCHAR(55),
+    opening_hours VARCHAR(55),
+);
+
+CREATE TABLE orders
+(
+    order_id INT PRIMARY KEY,
+    customer_id INT, -- Coming from customer table
+    restaurant_id INT, -- Coming from resturant table
+    order_item VARCHAR(55),
+    order_date DATE,
+    order_time TIME,
+    order_status VARCHAR(55),
+    total_amount FLOAT
+);
+
+CREATE TABLE rider
+(
+    rider_id INT PRIMARY KEY,	
+    rider_name VARCHAR(55),
+    sign_up DATE
+);
+
+CREATE TABLE deliveries
+(
+    delivery_id INT PRIMARY KEY,
+    order_id INT, -- Coming from order table
+    delivery_status VARCHAR(55),
+    delivery_time TIME,
+    rider_id INT, -- coming from rider table
+CONSTRAINT FK_order_id FOREIGN KEY (order_id) REFERENCES orders(order_id),
+CONSTRAINT FK_rider_id FOREIGN KEY (rider_id) REFERENCES rider(rider_id)
 );
 ```
 
 ### 2. Data Exploration & Cleaning
 
 - **Alter Column**: Alter column accordingly .
-- **Record Count**: Determine the total number of records in the dataset.
-- **Customer Count**: Find out how many unique customers are in the dataset.
-- **Category Count**: Identify all unique product categories in the dataset.
-- **Null Value Check**: Check for any null values in the dataset and delete records with missing data.
+- **Null Value Check**: Check for any null values in the dataset and delete records with missing data (No missing values).
 
 ```sql
-ALTER TABLE retail_sales CHANGE COLUMN quantiy quantity int;
-SELECT COUNT(*) as sales_count FROM retail_sales;
-SELECT COUNT(DISTINCT customer_id) as unique_customer FROM retail_sales;
-SELECT DISTINCT category FROM retail_sales;
+-- Add Foreign Keys
 
-SELECT * FROM retail_sales
-WHERE 
-    sale_date IS NULL OR sale_time IS NULL OR customer_id IS NULL OR 
-    gender IS NULL OR age IS NULL OR category IS NULL OR 
-    quantity IS NULL OR price_per_unit IS NULL OR cogs IS NULL;
+Alter table orders 
+add constraint FK_customer_id 
+foreign key (customer_id)
+references customers(customer_id);
 
-DELETE FROM retail_sales
-WHERE 
-    sale_date IS NULL OR sale_time IS NULL OR customer_id IS NULL OR 
-    gender IS NULL OR age IS NULL OR category IS NULL OR 
-    quantity IS NULL OR price_per_unit IS NULL OR cogs IS NULL;
+Alter table orders 
+add constraint FK_restaurant_id
+foreign key (restaurant_id)
+references restaurants(restaurant_id);
 ```
 
 ### 3. Data Analysis & Findings
 
 The following SQL queries were developed to answer specific business questions:
 
-1. **Write a SQL query to retrieve all columns for sales made on '2022-11-05**:
-```sql
-SELECT *
-FROM retail_sales
-WHERE sale_date = '2022-11-05';
-```
+1. **Write a query to find the top 5 most frequently ordered dishes by customer called "Arjun Mehta" in the last 1 year**:
+**/*
+-- Join orders and customers table
+-- Count Orders
+-- Filter only for 'Arjun Mehta' and Order >= 'Last 1 Year'
+-- Group by
+-- Order by desc
+-- Limit for 5
+*/**
 
-2. **Write a SQL query to retrieve all transactions where the category is 'Clothing' and the quantity sold is more than 3 in the month of Nov-2022**:
+**A) Query without Windows**
+
 ```sql
 SELECT 
-  *
-FROM retail_sales
+	c.customer_name, 
+	o.order_item AS dishes,
+	COUNT(o.order_id) AS total_orders
+FROM orders AS o
+INNER JOIN
+customers AS c
+ON o.customer_id = c.customer_id
 WHERE 
-    category = 'Clothing'
-    AND
-    quantity > 3
-    AND 
-    sale_date >= '2022-11-01'
-    AND 
-    sale_date <= '2022-11-30';
+c.customer_name = 'Arjun Mehta'
+AND
+order_date >= current_date - INTERVAL '1 Year' 
+GROUP BY 1,2
+ORDER BY COUNT(o.order_id) DESC
+LIMIT 5;
 ```
+**B) Query using Windows (Dense_rank) gives more accurate data in case if there is repeated count of values
+  Using Sub_Query to filter out Top_5 ordered dish**
 
-3. **Write a SQL query to calculate the total sales (total_sale) for each category.**:
 ```sql
 SELECT 
-    category,
-    SUM(total_sale) as total_sale
-FROM retail_sales
+	customer_name, dishes, total_orders, Top_5 
+FROM 
+	(SELECT 
+		c.customer_name, 
+		o.order_item AS dishes,
+		COUNT(o.order_id) AS total_orders,
+		DENSE_RANK() OVER(ORDER BY COUNT(o.order_id) DESC) AS top_5
+	FROM orders AS o
+	INNER JOIN
+	customers AS c
+	ON o.customer_id = c.customer_id
+	WHERE 
+	c.customer_name = 'Arjun Mehta'
+	AND
+	order_date >= current_date - INTERVAL '1 Year' 
+	GROUP BY 1,2) AS frequently_ordered_dishes
+WHERE top_5 <= 5;
+```
+
+2. **Popular Time Slots:
+   Identify the time slots during which the most orders are placed. based on 2-hour intervals.**:
+**A)**
+```sql
+SELECT
+(GENERATE_SERIES(
+    '2025-01-01 00:00:00'::TIMESTAMP,
+    '2025-01-01 23:59:59'::TIMESTAMP,
+    '2 hours'::INTERVAL
+))::time AS interval_start,
+COUNT(order_id)
+FROM orders
 GROUP BY 1;
 ```
 
-4. **Write a SQL query to find the average age of customers who purchased items from the 'Beauty' category.**:
+**B)**
 ```sql
-SELECT
-    ROUND(AVG(age), 2) as avg_age
-FROM retail_sales
-WHERE category = 'Beauty';
+SELECT 
+	CASE
+	WHEN EXTRACT(HOUR FROM Order_time) BETWEEN 0 and 1 THEN '00:00 - 02;00'
+	WHEN EXTRACT(HOUR FROM Order_time) BETWEEN 2 and 3 THEN '02:00 - 04:00'
+	WHEN EXTRACT(HOUR FROM Order_time) BETWEEN 4 and 5 THEN '04:00 - 06:00'
+	WHEN EXTRACT(HOUR FROM Order_time) BETWEEN 6 and 7 THEN '06:00 - 08:00'
+	WHEN EXTRACT(HOUR FROM Order_time) BETWEEN 8 and 9 THEN '08:00 - 10:00'
+	WHEN EXTRACT(HOUR FROM Order_time) BETWEEN 10 and 11 THEN '10:00 - 12:00'
+	WHEN EXTRACT(HOUR FROM Order_time) BETWEEN 12 and 13 THEN '12:00 - 14:00'
+	WHEN EXTRACT(HOUR FROM Order_time) BETWEEN 14 and 15 THEN '14:00 - 16:00'
+	WHEN EXTRACT(HOUR FROM Order_time) BETWEEN 16 and 17 THEN '16:00 - 18:00'
+	WHEN EXTRACT(HOUR FROM Order_time) BETWEEN 18 and 19 THEN '18:00 - 20:00'
+	WHEN EXTRACT(HOUR FROM Order_time) BETWEEN 20 and 21 THEN '20:00 - 22:00'
+	WHEN EXTRACT(HOUR FROM Order_time) BETWEEN 22 and 23 THEN '22:00 - 00:00'
+END AS Time_Slot,
+COUNT(order_id) AS count_orders
+FROM orders
+GROUP BY time_slot
+ORDER BY count_orders DESC;
+```
+
+3. **Order Value Analysis:
+   Find the average order value per customer who has placed more than 300 orders.
+   Return customer_name, and aov(average order value)**:
+
+**/*
+-- Join Orders and Customers table
+-- Count orders
+-- Filter orders placed only by particular customer > 300 orders
+-- Avg value 
+-- Sub-Query 
+*/**
+   
+```sql
+SELECT Customer_name, Avg_amount FROM 
+(SELECT
+	c.customer_name AS Customer_name,
+	ROUND(AVG(total_amount)) AS Avg_amount,
+	COUNT(o.order_id) AS O_C
+FROM orders AS o
+INNER JOIN
+customers AS c
+ON o.customer_id = c.customer_id
+GROUP BY 1
+HAVING COUNT(o.order_id) > 300
+ORDER BY Avg_amount DESC) AS Order_Value_Analysis;
+```
+
+4. **High-Value Customers:
+   List the customers who have spent more than 100K in total on food orders.
+   return customer_name, and customer_id**:
+
+**/*
+-- Join Orders and Customers table
+-- Sum order value
+-- Filter order value > 100K
+-- Sub-Query 
+-- Result = Out of 33 Customer, 32 customers have spent more then 100K
+*/**
+   
+```sql
+SELECT customer_name, customer_id FROM 
+(SELECT 
+	c.customer_name,
+	o.customer_id,
+	SUM(o.total_amount) AS Total_spent
+FROM orders AS o
+INNER JOIN
+customers AS c
+ON o.customer_id = c.customer_id
+GROUP BY 1,2
+HAVING SUM(o.total_amount) > 100000
+ORDER BY Total_spent DESC) AS High_Value_Customers
+ORDER BY 2 ASC;
 ```
 
 5. **Write a SQL query to find all transactions where the total_sale is greater than 1000.**:
