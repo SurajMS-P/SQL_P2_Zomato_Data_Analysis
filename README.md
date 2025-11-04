@@ -10,10 +10,10 @@ This project is designed to demonstrate SQL skills and techniques typically used
 
 ## Objectives
 
-1. **Set up a retail sales database**: Create and populate a retail sales database with the provided sales data.
+1. **Set up a retail sales database**: Create and populate a Customers, Restaurants, Orders, Riders, Deliveries database with the provided data.
 2. **Data Cleaning**: Identify and remove any records with missing or null values.
 3. **Exploratory Data Analysis (EDA)**: Perform basic exploratory data analysis to understand the dataset.
-4. **Business Analysis**: Use SQL to answer specific business questions and derive insights from the sales data.
+4. **Business Analysis**: Use SQL to answer specific business questions and derive insights from the Customers, Restaurants, Orders, Riders, Deliveries data.
 
 ## Project Structure
 
@@ -154,6 +154,7 @@ WHERE top_5 <= 5;
 
 2. **Popular Time Slots:
    Identify the time slots during which the most orders are placed. based on 2-hour intervals.**:
+   
 **A)**
 ```sql
 SELECT
@@ -245,119 +246,172 @@ ORDER BY Total_spent DESC) AS High_Value_Customers
 ORDER BY 2 ASC;
 ```
 
-5. **Write a SQL query to find all transactions where the total_sale is greater than 1000.**:
+5. **Orders Without Delivery:
+   Write a query to find orders that were placed but not delivered.
+   Return each restuarant name, city and number of not delivered orders**:
+   
 ```sql
-SELECT * FROM retail_sales
-WHERE total_sale > 1000;
+SELECT restaurant_name, city, COUNT(Deliver_stat) AS Count_Not_Delivered FROM
+(SELECT 
+	r.restaurant_name, 
+	r.city,
+	d.delivery_status AS Deliver_stat
+FROM restaurants AS r
+INNER JOIN
+orders AS o      -- First join with orders table
+ON r.restaurant_id = o.restaurant_id
+INNER JOIN
+deliveries AS d  -- Then join with deliveries table (No common column b/w restaurants & deliveries table )
+ON o.order_id = d.order_id
+WHERE d.delivery_status = 'Not Delivered') AS Orders_Without_Delivery
+GROUP BY 1,2
+ORDER BY Count_Not_Delivered DESC;
 ```
 
-6. **Write a SQL query to find the total number of transactions (transaction_id) made by each gender in each category.**:
+6. **Restaurant Revenue Ranking:
+   Rank restaurants by their total revenue from the last year, including their name,
+   total revenue, and rank within their city.**:
+   
 ```sql
 SELECT 
-    category,
-    gender,
-    COUNT(*) as t_transactions,
-    COUNT(transactions_id) as t_t
-FROM retail_sales
-GROUP 
-    BY 
-    category,
-    gender
-ORDER BY 1;
-```
-
-7. **Write a SQL query to calculate the average sale for each month. Find out best selling month in each year**:
-```sql
-SELECT 
-       yr,
-       b_s_mnth,
-    avg_sale
+	r.city,
+	r.restaurant_name,
+	SUM(o.total_amount) AS Total_revenue,
+	DENSE_RANK() OVER(PARTITION BY r.city ORDER BY SUM(o.total_amount) DESC) AS restaurant_rank
 FROM 
-(    
-SELECT 
-    YEAR(sale_date) as yr,
-    MONTH(sale_date) as b_s_mnth,
-    ROUND(AVG(total_sale),0) as avg_sale,
-    DENSE_RANK() OVER(PARTITION BY YEAR(sale_date) ORDER BY ROUND(AVG(total_sale),0) ) as rnk
-FROM retail_sales
-GROUP BY 1, 2
-) as best_selling_month 
-WHERE rnk = 12;
+orders AS o 
+INNER JOIN 
+restaurants AS r
+ON o.restaurant_id = r.restaurant_id
+WHERE EXTRACT(YEAR FROM o.order_date) = EXTRACT(YEAR FROM current_date) - 1
+GROUP BY 1,2;
 ```
 
-8. **Write a SQL query to find the top 5 customers based on the highest total sales.**:
+7. **Most Popular Dish by City:
+   Identify the most popular dish in each city based on the number of orders.**:
+   
 ```sql
-SELECT 
-    customer_id,
-    SUM(total_sale) as total_sales
-FROM retail_sales
-GROUP BY 1
-ORDER BY 2 DESC
-LIMIT 5;
+SELECT city, Most_Popular_Dish_by_City from
+(SELECT 
+	r.city,
+	o.order_item AS Most_Popular_Dish_by_City,
+	COUNT(o.order_id) AS Number_of_orders,
+	DENSE_RANK() OVER(PARTITION BY r.city ORDER BY COUNT(o.order_id) DESC) AS rnk
+FROM 
+orders AS o
+INNER JOIN
+restaurants AS r
+ON o.restaurant_id = r.restaurant_id
+GROUP BY 1,2) AS Most_Popular_Dish
+WHERE rnk = 1;
 ```
 
-9. **Write a SQL query to find the number of unique customers who purchased items from each category.**:
+8. **Customer Churn:
+   Find customers who haven't placed an order in 2024 but did in 2023.**:
+
+**/* Finding distinct Customers who haven't placed an order in 2024 but did in 2023
+   Resulted to '0' Customers as all the customers have ordered in both years
+   Solved Query in 2 ways */**
+
+**A) By joining Orders and Customers table**
 ```sql
-SELECT 
-    category,    
-    COUNT(DISTINCT customer_id) unique_customer
-FROM retail_sales
-GROUP BY 1;
+SELECT DISTINCT c.customer_id
+	FROM 
+	customers AS c
+	INNER JOIN
+	orders AS o
+ON c.customer_id = o.customer_id 
+WHERE 
+EXTRACT(YEAR FROM o.order_date) = 2023
+AND
+c.customer_id NOT IN
+(SELECT DISTINCT c.customer_id
+	FROM 
+	customers AS c
+	INNER JOIN
+	orders AS o
+ON c.customer_id = o.customer_id 
+WHERE
+EXTRACT(YEAR FROM o.order_date) = 2024);
+```
+**B) By Comparing 2 tables**
+```sql
+SELECT DISTINCT customer_id
+	FROM 
+	customers 
+WHERE 
+EXTRACT(YEAR FROM current_date) = EXTRACT(YEAR FROM current_date) - 1
+AND
+customer_id NOT IN
+(SELECT DISTINCT customer_id
+	FROM 
+	ORDERS
+WHERE 
+EXTRACT(YEAR FROM current_date) = EXTRACT(YEAR FROM current_date));
 ```
 
-10. **Write a SQL query to create each shift and number of orders (Example Morning <12, Afternoon Between 12 & 17, Evening >17)**:
+9. **Rider Average Delivery Time:
+   Determine each rider's average delivery time.**:
+   
 ```sql
-WITH hourly_sale
-AS
-(
-SELECT *,
-    CASE
-        WHEN HOUR(sale_time) <= 12 THEN 'Morning'
-        WHEN HOUR(sale_time) BETWEEN 12 AND 17 THEN 'Afternoon'
-        ELSE 'Evening'
-    END as shift
-FROM retail_sales
-)
 SELECT 
-    shift,
-    COUNT(*)   
-FROM hourly_sale
-GROUP BY shift;
+	o.order_id,
+	o.order_time,
+	d.delivery_time,
+	d.rider_id,
+	d.delivery_time - o.order_time AS time_difference,
+EXTRACT(EPOCH FROM ( d.delivery_time - o.order_time +
+	CASE WHEN d.delivery_time < o.order_time THEN INTERVAL '1 day'
+	ELSE INTERVAL '0 day' END))/60 AS time_difference_in_sec
+FROM orders AS o
+INNER JOIN
+deliveries AS d
+ON o.order_id = d.order_id
+WHERE d.delivery_status = 'Delivered';
 ```
 
+10. **Monthly Restaurant Growth Ratio:
+    Calculate each restaurant's growth ratio based on the total number of delivered orders since its joining.**:
+    
 ```sql
+SELECT 
+		restaurant_id,
+		month,
+		Curr_month_orders,
+		prev_month_orders,
+		ROUND((Curr_month_orders::NUMERIC-prev_month_orders::NUMERIC)/prev_month_orders::NUMERIC * 100,2) AS Growth_ratio FROM (
 SELECT
-    shift,
-    COUNT(*)
-from
-(
-Select *,
-    Case
-        WHEN HOUR(sale_time) <=12 THEN "Morning"
-        WHEN HOUR(sale_time) BETWEEN 12 AND 17 THEN "Afternoon"
-        ELSE "Evening"
-    END as shift
-FROM retail_sales
-) as ab
-GROUP BY 1;
+	o.restaurant_id,
+	TO_CHAR(o.order_date, 'mm') AS month,
+	COUNT(o.order_id) AS Curr_month_orders,
+	LAG(COUNT(o.order_id),1) OVER(PARTITION BY o.restaurant_id ORDER BY TO_CHAR(o.order_date, 'mm')) AS prev_month_orders
+FROM orders AS o
+JOIN
+deliveries AS d
+ON o.order_id = d.order_id
+WHERE d.delivery_status = 'Delivered'
+GROUP BY 1,2
+ORDER BY 1,2) AS Growth_Ratio;
 ```
 
 ## Findings
 
-- **Customer Demographics**: The dataset includes customers from various age groups, with sales distributed across different categories such as Clothing and Beauty.
-- **High-Value Transactions**: Several transactions had a total sale amount greater than 1000, indicating premium purchases.
-- **Sales Trends**: Monthly analysis shows variations in sales, helping identify peak seasons.
-- **Customer Insights**: The analysis identifies the top-spending customers and the most popular product categories.
+- **Customer Demographics**: The dataset contains customers registered at different times, showing a diverse customer base with varying order frequencies. Some customers        are identified as frequent or high-value users based on their total spending across multiple restaurants.
+- **High-Value Orders**: Several orders have a total_amount greater than 1000, indicating premium or large group orders. These transactions highlight customers who prefer       high-value meals or multiple-item purchases.
+- **Restaurant Performance**: Analysis of the restaurants table shows variations in order volume by city and opening hours, helping identify top-performing restaurants and      peak business hours.
+- **Order Trends**: Monthly and daily analysis of the orders table reveals variations in order frequency, indicating peak dining times and busy days for the platform. This      insight supports better restaurant and rider scheduling.
+- **Delivery Efficiency**: By examining the deliveries table, patterns in delivery_status and delivery_time reveal insights into rider performance and operational               efficiency. Some riders consistently complete deliveries faster, indicating potential best practices.
+- **Rider Performance**: Analysis of the rider table (using sign_up and delivery data) identifies active riders and delivery reliability trends, which can guide resource        allocation and training.
 
 ## Reports
 
-- **Sales Summary**: A detailed report summarizing total sales, customer demographics, and category performance.
-- **Trend Analysis**: Insights into sales trends across different months and shifts.
-- **Customer Insights**: Reports on top customers and unique customer counts per category.
+- **Orders Summary**: A detailed report summarizing total orders, customer, restaurant demographics, and category performance.
+- **Trend Analysis**: Insights into orders trends across different restaurants and dishes.
+- **Customer Insights**: Reports on top customers and unique customer counts per orders.
 
 ## Conclusion
 
-This project serves as a comprehensive introduction to SQL for data analysts, covering database setup, data cleaning, exploratory data analysis, and business-driven SQL queries. The findings from this project can help drive business decisions by understanding sales patterns, customer behavior, and product performance.
+This project serves as a comprehensive introduction to SQL for data analysts, covering database setup, data cleaning, exploratory data analysis, and business-driven SQL queries. The findings from this project can help drive business decisions by understanding orders patterns, customer behavior, and restaurant performance.
 
 ## How to Use
 
